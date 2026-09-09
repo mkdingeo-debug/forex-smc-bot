@@ -99,9 +99,17 @@ MIN_OB_BODY_ATR_MULT = float(os.environ.get("MIN_OB_BODY_ATR_MULT", "0.15"))
 BREAK_VOLUME_CONFIRM_MULT = float(os.environ.get("BREAK_VOLUME_CONFIRM_MULT", "1.2"))
 
 # Pausa entre llamadas a la API para no exceder el límite gratuito de Twelve
-# Data (8 llamadas por minuto). 8 segundos de pausa = máx 7.5 llamadas/min,
-# con margen de seguridad.
-API_CALL_DELAY_SECONDS = float(os.environ.get("API_CALL_DELAY_SECONDS", "8"))
+# Data (8 llamadas por minuto). Se sube a 9s (en vez de 8s) para dejar un
+# pequeño margen de seguridad: 8s exactos quedaban justo en el límite
+# matemático y una llamada un poco lenta podía hacer que el símbolo
+# siguiente cayera fuera de la ventana de 1 minuto y fallara por 429.
+API_CALL_DELAY_SECONDS = float(os.environ.get("API_CALL_DELAY_SECONDS", "9"))
+
+# Cuánto esperar antes de reintentar un símbolo que falló específicamente
+# por límite de velocidad (HTTP 429). Twelve Data resetea la cuota de
+# créditos al inicio de cada minuto, así que 65s de espera es suficiente
+# margen para garantizar que el reintento caiga en una ventana nueva.
+RATE_LIMIT_RETRY_WAIT_SECONDS = float(os.environ.get("RATE_LIMIT_RETRY_WAIT_SECONDS", "65"))
 
 DEPLOY_LABEL = os.environ.get("DEPLOY_LABEL", "").strip()
 
@@ -127,6 +135,11 @@ tanto ganancias como pérdidas.
 # ==============================================================================
 # 1. DESCARGA DE DATOS (Twelve Data API)
 # ==============================================================================
+class RateLimitError(RuntimeError):
+    """Se lanza cuando Twelve Data responde 429 (límite de créditos/minuto agotado)."""
+    pass
+
+
 def fetch_klines(symbol: str, interval: str = "1h", outputsize: int = 300) -> pd.DataFrame:
     if not TWELVEDATA_API_KEY:
         raise RuntimeError(
@@ -141,10 +154,19 @@ def fetch_klines(symbol: str, interval: str = "1h", outputsize: int = 300) -> pd
         "apikey": TWELVEDATA_API_KEY,
     }
     resp = requests.get(url, params=params, timeout=20)
+    if resp.status_code == 429:
+        raise RateLimitError(
+            f"Twelve Data devolvió 429 (límite de créditos por minuto agotado) para {symbol}."
+        )
     resp.raise_for_status()
     data = resp.json()
 
     if data.get("status") == "error" or "values" not in data:
+        # Algunas veces Twelve Data devuelve el aviso de límite con código 200
+        # y "status": "error" en el cuerpo, en vez de un HTTP 429 real.
+        message = str(data.get("message", data))
+        if data.get("code") == 429 or "run out of api credits" in message.lower():
+            raise RateLimitError(f"Twelve Data (límite de créditos) para {symbol}: {message}")
         raise RuntimeError(f"Twelve Data API error para {symbol}: {data.get('message', data)}")
 
     rows = data["values"]
@@ -830,6 +852,19 @@ def run_once(symbols: List[str], interval: str, outputsize: int, use_telegram: b
             print(text)
             if use_telegram:
                 send_telegram_message(text)
+        except RateLimitError as exc:
+            # No lo descartamos de una: esperamos a que Twelve Data resetee
+            # la cuota de créditos (al inicio del próximo minuto) y
+            # reintentamos ESTE símbolo una sola vez antes de rendirnos.
+            print(f"[Límite de velocidad] {exc}. Reintentando en {RATE_LIMIT_RETRY_WAIT_SECONDS:.0f}s...")
+            time.sleep(RATE_LIMIT_RETRY_WAIT_SECONDS)
+            try:
+                text = analyze_symbol(symbol, interval, outputsize)
+                print(text)
+                if use_telegram:
+                    send_telegram_message(text)
+            except Exception as exc2:
+                print(f"[Error analizando {symbol} tras reintento] {exc2}")
         except Exception as exc:
             print(f"[Error analizando {symbol}] {exc}")
         # Respeta el límite de 8 llamadas/min del plan gratuito de Twelve
