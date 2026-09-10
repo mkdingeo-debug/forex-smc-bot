@@ -3,9 +3,15 @@
 ================================================================================
 KEEP_ALIVE — envoltorio para desplegar forex_smc_analyst.py en Render (free)
 ================================================================================
-Mismo patrón que ya usas en el bot de LTC: lanza el script de análisis como
-proceso hijo y levanta un servidor HTTP mínimo para que UptimeRobot pueda
-hacer ping y Render no duerma el servicio.
+Lanza el script de análisis como proceso hijo y levanta un servidor HTTP
+mínimo para que UptimeRobot pueda hacer ping y Render no duerma el servicio.
+
+IMPORTANTE (corrección aplicada): se lanza el proceso hijo con la opción
+-u (salida sin buffer). Sin esto, los mensajes de print() del bot pueden
+quedar "atascados" en un buffer interno y no aparecer en los Logs de
+Render hasta que se acumula suficiente texto o el proceso termina — dando
+la falsa impresión de que el bot está colgado cuando en realidad sigue
+trabajando por dentro.
 
 Uso en el Procfile de Render:
     web: python keep_alive.py
@@ -13,7 +19,7 @@ Uso en el Procfile de Render:
 Variables de entorno relevantes:
     PORT          La asigna Render automáticamente, no hay que tocarla.
     ANALYST_ARGS  Opcional, para cambiar los argumentos sin editar este
-                  archivo, ej. "--interval 1h --watch 30 --telegram"
+                  archivo, ej. "--interval 60 --watch 60 --telegram"
 ================================================================================
 """
 import os
@@ -23,7 +29,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-DEFAULT_ARGS = ["--interval", "1h", "--watch", "60", "--telegram"]
+DEFAULT_ARGS = ["--interval", "60", "--watch", "60", "--telegram"]
 
 _last_restart_count = 0
 _lock = threading.Lock()
@@ -32,7 +38,9 @@ _lock = threading.Lock()
 def build_analyst_cmd():
     custom = os.environ.get("ANALYST_ARGS", "").strip()
     args = custom.split() if custom else DEFAULT_ARGS
-    return [sys.executable, "forex_smc_analyst.py", *args]
+    # "-u" = salida sin buffer, para que los print() del bot aparezcan en
+    # los Logs de Render al instante, en vez de quedar retenidos.
+    return [sys.executable, "-u", "forex_smc_analyst.py", *args]
 
 
 def run_analyst_forever():
@@ -54,10 +62,6 @@ def run_analyst_forever():
 
 class PingHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
-        # UptimeRobot y otros monitores a veces usan HEAD en vez de GET.
-        # Sin este método, el servidor respondía 501 Not Implemented y
-        # el monitor marcaba el bot como "caído" aunque siguiera
-        # funcionando por dentro.
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.end_headers()
