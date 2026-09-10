@@ -29,7 +29,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-DEFAULT_ARGS = ["--interval", "60", "--watch", "60", "--telegram"]
+DEFAULT_ARGS = ["--interval", "1h", "--watch", "60", "--telegram"]
 
 _last_restart_count = 0
 _lock = threading.Lock()
