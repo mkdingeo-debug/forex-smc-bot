@@ -182,6 +182,7 @@ def construir_explicacion_hablada(symbol: str, report) -> str:
 
 
 def generar_audio_explicacion(texto: str):
+    print(f"[Audio] Generando audio con gTTS ({len(texto)} caracteres de texto)...")
     try:
         from gtts import gTTS
         import io
@@ -189,9 +190,11 @@ def generar_audio_explicacion(texto: str):
         # tld="com.mx" da un acento de español latinoamericano, generalmente
         # más neutro y claro que el acento de España que sale por defecto.
         gTTS(text=texto, lang="es", tld="com.mx").write_to_fp(buf)
-        return buf.getvalue()
+        audio_bytes = buf.getvalue()
+        print(f"[Audio] Audio generado OK ({len(audio_bytes)} bytes).")
+        return audio_bytes
     except Exception as exc:
-        print(f"[Aviso] No se pudo generar el audio de explicación: {exc}")
+        print(f"[Aviso] No se pudo generar el audio de explicación: {type(exc).__name__}: {exc}")
         return None
 
 
@@ -200,6 +203,7 @@ def subir_audio_supabase(audio_bytes, symbol: str):
     el backoffice pueda reproducir la MISMA voz que se manda a Telegram (en
     vez de depender de la voz que traiga cada celular)."""
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        print("[Audio] Falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY, no se sube el audio.")
         return None
     nombre_archivo = f"{BOT_NAME}/{symbol.replace('/', '-')}-{int(time.time())}.mp3"
     url = f"{SUPABASE_URL}/storage/v1/object/audios-senales/{nombre_archivo}"
@@ -217,9 +221,11 @@ def subir_audio_supabase(audio_bytes, symbol: str):
         if resp.status_code >= 300:
             print(f"[Aviso] No se pudo subir el audio de {symbol}: {resp.status_code} {resp.text}")
             return None
-        return f"{SUPABASE_URL}/storage/v1/object/public/audios-senales/{nombre_archivo}"
+        link = f"{SUPABASE_URL}/storage/v1/object/public/audios-senales/{nombre_archivo}"
+        print(f"[Audio] Subido a Supabase OK: {link}")
+        return link
     except Exception as exc:
-        print(f"[Aviso] Error subiendo el audio de {symbol}: {exc}")
+        print(f"[Aviso] Error subiendo el audio de {symbol}: {type(exc).__name__}: {exc}")
         return None
 
 
@@ -227,6 +233,7 @@ def enviar_audio_telegram(audio_bytes, symbol: str) -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
+        print("[Audio] Falta TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID, no se manda el audio.")
         return
     url = f"https://api.telegram.org/bot{token}/sendAudio"
     try:
@@ -239,8 +246,10 @@ def enviar_audio_telegram(audio_bytes, symbol: str) -> None:
         result = resp.json()
         if not result.get("ok"):
             print(f"[Error Telegram audio] {result}")
+        else:
+            print(f"[Audio] Enviado a Telegram OK (message_id {result['result']['message_id']}).")
     except Exception as exc:
-        print(f"[Error enviando audio a Telegram] {exc}")
+        print(f"[Error enviando audio a Telegram] {type(exc).__name__}: {exc}")
 
 
 
@@ -1054,6 +1063,7 @@ def run_once(symbols: List[str], interval: str, outputsize: int, use_telegram: b
                 send_telegram_message(text)
             audio_url = None
             if report.trade_plan is not None:
+                print(f"[Audio] {symbol} tiene plan de trading, generando explicación hablada...")
                 audio = generar_audio_explicacion(construir_explicacion_hablada(symbol, report))
                 if audio:
                     if use_telegram:
@@ -1073,6 +1083,7 @@ def run_once(symbols: List[str], interval: str, outputsize: int, use_telegram: b
                     send_telegram_message(text)
                 audio_url = None
                 if report.trade_plan is not None:
+                    print(f"[Audio] {symbol} tiene plan de trading, generando explicación hablada (tras reintento)...")
                     audio = generar_audio_explicacion(construir_explicacion_hablada(symbol, report))
                     if audio:
                         if use_telegram:
