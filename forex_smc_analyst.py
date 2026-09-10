@@ -362,7 +362,7 @@ def fetch_klines(symbol: str, interval: str = "1h", outputsize: int = 300) -> pd
         "outputsize": outputsize,
         "apikey": TWELVEDATA_API_KEY,
     }
-    resp = requests.get(url, params=params, timeout=20)
+    resp = requests.get(url, params=params, timeout=30)
     if resp.status_code == 429:
         raise RateLimitError(
             f"Twelve Data devolvió 429 (límite de créditos por minuto agotado) para {symbol}."
@@ -1092,6 +1092,27 @@ def run_once(symbols: List[str], interval: str, outputsize: int, use_telegram: b
                 guardar_senal_supabase(symbol, report, audio_url)
             except Exception as exc2:
                 print(f"[Error analizando {symbol} tras reintento] {exc2}")
+        except requests.exceptions.RequestException as exc:
+            # Timeout, corte de conexión, etc. — no es un tema de cuota, así
+            # que alcanza con una espera corta antes de reintentar.
+            print(f"[Aviso] Error de red en {symbol}: {exc}. Reintentando en 8s...")
+            time.sleep(8)
+            try:
+                text, report = analyze_symbol(symbol, interval, outputsize)
+                print(text)
+                if use_telegram:
+                    send_telegram_message(text)
+                audio_url = None
+                if report.trade_plan is not None:
+                    print(f"[Audio] {symbol} tiene plan de trading, generando explicación hablada (tras reintento de red)...")
+                    audio = generar_audio_explicacion(construir_explicacion_hablada(symbol, report))
+                    if audio:
+                        if use_telegram:
+                            enviar_audio_telegram(audio, symbol)
+                        audio_url = subir_audio_supabase(audio, symbol)
+                guardar_senal_supabase(symbol, report, audio_url)
+            except Exception as exc2:
+                print(f"[Error analizando {symbol} tras reintento de red] {exc2}")
         except Exception as exc:
             print(f"[Error analizando {symbol}] {exc}")
         # Respeta el límite de 8 llamadas/min del plan gratuito de Twelve
