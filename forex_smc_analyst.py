@@ -60,7 +60,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Literal
 
 import numpy as np
@@ -123,6 +123,21 @@ OTE_LEVELS = (0.618, 0.705, 0.79)  # niveles institucionales de retroceso (ICT O
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 BOT_NAME = "forex"  # debe coincidir con el check constraint de la columna "bot" en la tabla senales
+
+# ── Zona horaria (agregado a pedido del usuario) ────────────────────────────
+# Los reportes siempre muestran la hora en UTC (así todos los bots son
+# consistentes entre sí), pero además muestran la hora local aproximada
+# entre paréntesis, para que tus clientes no tengan que hacer la cuenta a
+# mano. Configurable por si en algún momento cambia el huso horario del
+# negocio o de la mayoría de los clientes.
+TIMEZONE_OFFSET_HORAS = float(os.environ.get("TIMEZONE_OFFSET_HORAS", "-5"))
+
+
+def formatear_fecha_con_hora_local(dt) -> str:
+    local = dt + timedelta(hours=TIMEZONE_OFFSET_HORAS)
+    signo = "+" if TIMEZONE_OFFSET_HORAS >= 0 else "-"
+    return f"{dt:%Y-%m-%d %H:%M} UTC ({local:%H:%M} hora local, UTC{signo}{abs(TIMEZONE_OFFSET_HORAS):g})"
+
 BOT_NAME_LEGIBLE = "Forex"
 
 # ── Explicación hablada en español simple (para los clientes del canal) ────
@@ -953,7 +968,7 @@ def render_template_report(report: SignalReport, interval: str) -> str:
     L = []
     label_prefix = f"[{DEPLOY_LABEL}] " if DEPLOY_LABEL else ""
     L.append(f"═══ {label_prefix}RIDGECREST FX | NATHANIEL RIDGE | {report.symbol} | TF {interval} ═══")
-    L.append(f"{report.generated_at:%Y-%m-%d %H:%M UTC}")
+    L.append(formatear_fecha_con_hora_local(report.generated_at))
     L.append("")
 
     if report.capital_flow_alert:
