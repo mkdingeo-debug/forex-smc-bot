@@ -994,7 +994,7 @@ def render_template_report(report: SignalReport, interval: str) -> str:
         )
         L.append("")
 
-    L.append("1) ESTRUCTURA Y SESGO")
+    L.append("<b>1) ESTRUCTURA Y SESGO</b>")
     L.append(f"   Precio: {report.price:.5f} | Sesgo: {report.bias.upper()} | Confianza: {report.confidence}")
     L.append(f"   RSI({RSI_PERIOD}): {report.rsi_note}")
     L.append(f"   ATR({ATR_PERIOD}): {report.atr:.5f} (volatilidad reciente, usada para la invalidación)")
@@ -1009,14 +1009,14 @@ def render_template_report(report: SignalReport, interval: str) -> str:
     if report.premium_discount:
         pd_i = report.premium_discount
         L.append("")
-        L.append("2) PREMIUM / DISCOUNT (ICT)")
+        L.append("<b>2) PREMIUM / DISCOUNT (ICT)</b>")
         L.append(f"   Rango activo (último swing): {pd_i.range_low:.5f} — {pd_i.range_high:.5f}")
         L.append(f"   Precio: {pd_i.zone}")
         levels_txt = " | ".join(f"{fib}: {p:.5f}" for fib, p in pd_i.ote_levels.items())
         L.append(f"   Niveles OTE: {levels_txt}")
 
     L.append("")
-    L.append("3) LIQUIDEZ")
+    L.append("<b>3) LIQUIDEZ</b>")
     if report.liquidity_zones:
         for z in report.liquidity_zones:
             L.append(f"   - {z.note}")
@@ -1024,7 +1024,7 @@ def render_template_report(report: SignalReport, interval: str) -> str:
         L.append("   - Sin agrupaciones claras de liquidez cerca del rango analizado.")
 
     L.append("")
-    L.append("4) OFERTA / DEMANDA (Order Blocks & FVG)")
+    L.append("<b>4) OFERTA / DEMANDA (Order Blocks & FVG)</b>")
     if report.ob_zones:
         for z in report.ob_zones:
             L.append(f"   - [{z.kind}] {z.bottom:.5f}-{z.top:.5f} | {z.note}")
@@ -1045,7 +1045,7 @@ def render_template_report(report: SignalReport, interval: str) -> str:
         L.append(f"   TP3: {tp.take_profit_3:.5f} (R:R {tp.rr3:.2f})")
     elif report.extension_targets:
         L.append("")
-        L.append("5) OBJETIVOS DE EXTENSIÓN (movimiento fuerte, sin retroceso aún)")
+        L.append(f"<b>5) OBJETIVOS DE EXTENSIÓN</b> (movimiento fuerte, sin retroceso aún) {'🟢' if report.bias == 'alcista' else '🔴'}")
         L.append("   No hay entrada recomendada aquí — el precio ya se movió sin retroceso, "
                   "entrar ahora implica peor R:R y mayor riesgo de reversión. Estos son "
                   "niveles de referencia por si el movimiento continúa:")
@@ -1083,7 +1083,7 @@ def send_telegram_message(text: str) -> None:
         text = text[:3990] + "\n...(recortado)"
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     try:
-        resp = requests.post(url, data={"chat_id": chat_id, "text": text}, timeout=15)
+        resp = requests.post(url, data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=15)
         resp.raise_for_status()
         result = resp.json()
         if not result.get("ok"):
