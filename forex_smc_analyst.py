@@ -1037,15 +1037,16 @@ def render_template_report(report: SignalReport, interval: str) -> str:
     if report.trade_plan:
         tp = report.trade_plan
         L.append("")
-        L.append("5) PLAN DE TRADING HIPOTÉTICO")
-        L.append(f"   Entrada (POI): {tp.entry_low:.5f} — {tp.entry_high:.5f}")
-        L.append(f"   Invalidación (SL): {tp.stop_loss:.5f}")
-        L.append(f"   TP1: {tp.take_profit_1:.5f} (R:R {tp.rr1:.2f}) — fuente: {tp.tp1_source}")
-        L.append(f"   TP2: {tp.take_profit_2:.5f} (R:R {tp.rr2:.2f})")
-        L.append(f"   TP3: {tp.take_profit_3:.5f} (R:R {tp.rr3:.2f})")
+        emoji_operacion = "🟢" if report.bias == "alcista" else "🔴"
+        L.append(f"<b>5) PLAN DE TRADING HIPOTÉTICO</b> {emoji_operacion}")
+        L.append(f"   <b>Entrada (POI):</b> {tp.entry_low:.5f} — {tp.entry_high:.5f}")
+        L.append(f"   <b>Invalidación (SL):</b> {tp.stop_loss:.5f}")
+        L.append(f"   <b>TP1:</b> {tp.take_profit_1:.5f} (<b>R:R</b> {tp.rr1:.2f}) — fuente: {tp.tp1_source}")
+        L.append(f"   <b>TP2:</b> {tp.take_profit_2:.5f} (<b>R:R</b> {tp.rr2:.2f})")
+        L.append(f"   <b>TP3:</b> {tp.take_profit_3:.5f} (<b>R:R</b> {tp.rr3:.2f})")
     elif report.extension_targets:
         L.append("")
-        L.append(f"<b>5) OBJETIVOS DE EXTENSIÓN</b> (movimiento fuerte, sin retroceso aún) {'🟢' if report.bias == 'alcista' else '🔴'}")
+        L.append("<b>5) OBJETIVOS DE EXTENSIÓN</b> (movimiento fuerte, sin retroceso aún) ⚪")
         L.append("   No hay entrada recomendada aquí — el precio ya se movió sin retroceso, "
                   "entrar ahora implica peor R:R y mayor riesgo de reversión. Estos son "
                   "niveles de referencia por si el movimiento continúa:")
@@ -1055,7 +1056,7 @@ def render_template_report(report: SignalReport, interval: str) -> str:
                   "de la sección 4, no perseguir el precio aquí.")
     else:
         L.append("")
-        L.append("5) PLAN DE TRADING HIPOTÉTICO")
+        L.append("<b>5) PLAN DE TRADING HIPOTÉTICO</b> ⚪")
         L.append("   Sin plan accionable en este momento (precio en extensión fuera del "
                   "último rango confirmado, o el Riesgo:Beneficio disponible no es "
                   "favorable). Se recomienda esperar un retroceso o una nueva "
