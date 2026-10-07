@@ -451,6 +451,10 @@ def fetch_klines(symbol: str, interval: str = "1h", outputsize: int = 300) -> pd
         "interval": interval,
         "outputsize": outputsize,
         "apikey": TWELVEDATA_API_KEY,
+        # Sin esto, Twelve Data devuelve las horas en otro huso horario
+        # (comprobado el 7-oct-2026: 11 horas adelantadas), y el código las
+        # trataba como UTC: por eso "Último evento" salía con horas futuras.
+        "timezone": "UTC",
     }
     resp = requests.get(url, params=params, timeout=30)
     if resp.status_code == 429:
